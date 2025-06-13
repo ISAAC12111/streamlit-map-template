@@ -1,40 +1,46 @@
 import streamlit as st
-import leafmap.foliumap as leafmap
+import folium
+from streamlit_folium import st_folium
+from geopy.geocoders import Nominatim
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="X 地圖標記", layout="wide")
+st.title("📍 X（Twitter）帳號地圖標記工具")
 
-# Customize the sidebar
-markdown = """
-A Streamlit map template
-<https://github.com/opengeos/streamlit-map-template>
-"""
+st.markdown("請輸入帳號與地點（每行一筆，格式：`帳號, 地點`）")
+user_input = st.text_area("輸入格式：帳號, 地點", height=200, placeholder="elonmusk, Austin, Texas\njack, New York")
 
-st.sidebar.title("About")
-st.sidebar.info(markdown)
-logo = "https://i.imgur.com/UbOXYAU.png"
-st.sidebar.image(logo)
+if st.button("📌 產生地圖"):
+    geolocator = Nominatim(user_agent="x_map_app")
+    lines = user_input.strip().split('\n')
 
-# Customize page title
-st.title("Streamlit for Geospatial Applications")
+    markers = []
+    for line in lines:
+        if ',' not in line:
+            st.warning(f"⚠️ 格式錯誤：{line}")
+            continue
+        username, location_text = [x.strip() for x in line.split(',', 1)]
+        try:
+            location = geolocator.geocode(location_text)
+            if location:
+                markers.append({
+                    'username': username,
+                    'location': location_text,
+                    'lat': location.latitude,
+                    'lon': location.longitude
+                })
+            else:
+                st.warning(f"❗ 找不到地點：{location_text}")
+        except Exception as e:
+            st.error(f"錯誤：{location_text}（{e}）")
 
-st.markdown(
-    """
-    This multipage app template demonstrates various interactive web apps created using [streamlit](https://streamlit.io) and [leafmap](https://leafmap.org). It is an open-source project and you are very welcome to contribute to the [GitHub repository](https://github.com/opengeos/streamlit-map-template).
-    """
-)
-
-st.header("Instructions")
-
-markdown = """
-1. For the [GitHub repository](https://github.com/opengeos/streamlit-map-template) or [use it as a template](https://github.com/opengeos/streamlit-map-template/generate) for your own project.
-2. Customize the sidebar by changing the sidebar text and logo in each Python files.
-3. Find your favorite emoji from https://emojipedia.org.
-4. Add a new app to the `pages/` directory with an emoji in the file name, e.g., `1_🚀_Chart.py`.
-
-"""
-
-st.markdown(markdown)
-
-m = leafmap.Map(minimap_control=True)
-m.add_basemap("OpenTopoMap")
-m.to_streamlit(height=500)
+    if markers:
+        m = folium.Map(location=[markers[0]['lat'], markers[0]['lon']], zoom_start=2)
+        for marker in markers:
+            folium.Marker(
+                location=[marker['lat'], marker['lon']],
+                tooltip=f"@{marker['username']}",
+                popup=f"@{marker['username']}<br>{marker['location']}"
+            ).add_to(m)
+        st_folium(m, width=800, height=600)
+    else:
+        st.info("⚠️ 沒有成功標記任何位置")
